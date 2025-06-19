@@ -30,6 +30,8 @@ import androidx.core.app.ServiceCompat.START_STICKY
 import androidx.core.app.ServiceCompat.startForeground
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getSystemService
+import androidx.lifecycle.LifecycleOwner
+import com.example.proyectoantifatiga.databinding.ActivityMainBinding
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
@@ -106,6 +108,8 @@ class ServicioCamara : Service() {
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var binding: ActivityMainBinding
+
     private lateinit var faceLandmarker: FaceLandmarker
     private val executor = Executors.newSingleThreadExecutor()
 
@@ -118,6 +122,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         //DANIEL
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         //permite la app en segundo plano y no se cierre
         val intentServicio = Intent(this, ServicioFatiga::class.java)
         startService(intentServicio)
@@ -197,6 +203,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startCamera(previewView: PreviewView) {
+        // ... faceProcessor ...
+
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
@@ -219,14 +227,23 @@ class MainActivity : ComponentActivity() {
                 } finally {
                     imageProxy.close()
                 }
+
             }
 
             val preview = Preview.Builder().build()
-            preview.setSurfaceProvider(previewView.surfaceProvider)
+           // preview.setSurfaceProvider(previewView.surfaceProvider)
+
 
             val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
             cameraProvider.unbindAll()
             cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
+            //DANIEL MODIFICACION
+            cameraProvider.bindToLifecycle(
+                this as LifecycleOwner,
+                cameraSelector,
+                // preview, // Opcional: puedes incluirlo o no. Si no se muestra, quizás no sea necesario.
+                imageAnalysis
+            )
 
         }, ContextCompat.getMainExecutor(this))
     }
