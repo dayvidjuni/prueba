@@ -17,8 +17,8 @@ class FatigueDetector(
     private val showFatigueMessage: MutableState<Boolean>,
     private val showYawnMessage: MutableState<Boolean>,
     private val fatigueDurationMillis: Long = 3000L,
-    private val eyeClosedThreshold: Float = 0.003f,
-    private val yawnThreshold: Float = 0.012f, // más sensible
+    private val eyeClosedThreshold: Float = 0.004f, // Más sensible a ojos cerrados
+    private val yawnThreshold: Float = 0.011f,      // Más sensible al bostezo
     private val yawnDurationMillis: Long = 1000L
 ) {
     private var eyeClosedStartTime: Long? = null
@@ -38,7 +38,6 @@ class FatigueDetector(
 
         val landmarks = faces.first()
         if (landmarks.size <= 386) {
-            Log.w("FatigueDetector", "⚠️ Landmarks incompletos. Frame ignorado.")
             reset()
             return
         }
@@ -76,9 +75,10 @@ class FatigueDetector(
             mouthOpenStartTime = null
         }
 
-        // Ignorar fatiga si hubo bostezo reciente
+        // Ignorar fatiga si hay bostezo reciente
         if (System.currentTimeMillis() - lastYawnTime < 2000L) {
             Log.d("FatigueDetector", "⏳ Ignorando fatiga tras bostezo reciente")
+            stopAlarm()
             return
         }
 
@@ -89,25 +89,14 @@ class FatigueDetector(
             }
 
             val elapsed = System.currentTimeMillis() - eyeClosedStartTime!!
-            if (elapsed >= fatigueDurationMillis && !fatigueHandled) {
+            if (elapsed >= fatigueDurationMillis) {
                 showFatigueMessage.value = true
                 playAlarm()
                 fatigueHandled = true
-
-                scope.launch {
-                    delay(2000L)
-                    resetFatigue()
-                }
             }
         } else {
-            // Aquí es donde corregimos: si ya no hay fatiga, apaga alarma
-            if (fatigueHandled) {
-                stopAlarm()
-                showFatigueMessage.value = false
-                fatigueHandled = false
-                Log.d("FatigueDetector", "✅ Ojos abiertos, fatiga cancelada")
-            }
-            eyeClosedStartTime = null
+            // Si los ojos se abren, se detiene la alarma
+            resetFatigue()
         }
     }
 
@@ -126,6 +115,7 @@ class FatigueDetector(
     }
 
     private fun playAlarm() {
+        if (mediaPlayer?.isPlaying == true) return
         stopAlarm()
         mediaPlayer = MediaPlayer.create(context.applicationContext, R.raw.alarma)
         mediaPlayer?.isLooping = true
