@@ -2,9 +2,7 @@ package com.example.proyectoantifatiga
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.MediaPlayer
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,22 +12,18 @@ import androidx.camera.view.PreviewView
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import com.example.proyectoantifatiga.utils.FatigueUI
-import com.example.proyectoantifatiga.detection.FaceLandmarkerManager
 import com.example.proyectoantifatiga.utils.BitmapUtils
+import com.example.proyectoantifatiga.utils.FatigueDetector
+import com.example.proyectoantifatiga.detection.FaceLandmarkerManager
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
-import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var faceLandmarkerManager: FaceLandmarkerManager
+    private lateinit var fatigueDetector: FatigueDetector
     private val executor = Executors.newSingleThreadExecutor()
-    private var showFatigueMessageRef: MutableState<Boolean>? = null
-    private var mediaPlayer: MediaPlayer? = null
-    private var eyeClosedStartTime: Long? = null
-    private val fatigueDurationMillis = 3000L
-    private val EYE_CLOSED_THRESHOLD = 0.01f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +44,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val showFatigueMessageState = remember { mutableStateOf(false) }
-            showFatigueMessageRef = showFatigueMessageState
+
+            // Inicializa detector con referencia a estado mutable
+            fatigueDetector = FatigueDetector(this, showFatigueMessageState)
 
             FatigueUI(
                 showFatigueMessage = showFatigueMessageState.value,
@@ -61,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
     private fun setupFaceLandmarker() {
         faceLandmarkerManager = FaceLandmarkerManager(this) { result ->
-            checkFatigue(result)
+            fatigueDetector.checkFatigue(result)
         }
     }
 
@@ -84,7 +80,7 @@ class MainActivity : ComponentActivity() {
                         System.currentTimeMillis()
                     )
                 } catch (e: Exception) {
-                    Log.e("Analyzer", "Error: ${e.message}")
+                    e.printStackTrace()
                 } finally {
                     imageProxy.close()
                 }
@@ -99,63 +95,4 @@ class MainActivity : ComponentActivity() {
 
         }, ContextCompat.getMainExecutor(this))
     }
-
-    private fun checkFatigue(result: FaceLandmarkerResult) {
-        val faces = result.faceLandmarks()
-        if (faces.size != 1) {
-            eyeClosedStartTime = null
-            showFatigueMessageRef?.value = false
-            stopAlarm()
-            return
-        }
-
-        val landmarks = faces.first()
-        if (landmarks.size <= 386) {
-            eyeClosedStartTime = null
-            showFatigueMessageRef?.value = false
-            stopAlarm()
-            return
-        }
-
-        val leftEyeOpen = kotlin.math.abs(landmarks[159].y() - landmarks[145].y())
-        val rightEyeOpen = kotlin.math.abs(landmarks[386].y() - landmarks[374].y())
-        val eyeAvg = (leftEyeOpen + rightEyeOpen) / 2f
-
-        runOnUiThread {
-            if (eyeAvg < EYE_CLOSED_THRESHOLD) {
-                if (eyeClosedStartTime == null) {
-                    eyeClosedStartTime = System.currentTimeMillis()
-                }
-                val elapsed = System.currentTimeMillis() - eyeClosedStartTime!!
-                if (elapsed >= fatigueDurationMillis) {
-                    if (showFatigueMessageRef?.value != true) {
-                        showFatigueMessageRef?.value = true
-                        playAlarm()
-                    }
-                }
-            } else {
-                eyeClosedStartTime = null
-                showFatigueMessageRef?.value = false
-                stopAlarm()
-            }
-        }
-    }
-
-    private fun playAlarm() {
-        if (mediaPlayer == null) {
-            mediaPlayer = MediaPlayer.create(this, R.raw.alarma)
-            mediaPlayer?.isLooping = true
-        }
-        if (mediaPlayer?.isPlaying == false) {
-            mediaPlayer?.start()
-        }
-    }
-
-    private fun stopAlarm() {
-        if (mediaPlayer?.isPlaying == true) {
-            mediaPlayer?.pause()
-            mediaPlayer?.seekTo(0)
-        }
-    }
 }
-
