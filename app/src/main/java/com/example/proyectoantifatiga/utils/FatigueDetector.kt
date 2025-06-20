@@ -17,8 +17,8 @@ class FatigueDetector(
     private val showFatigueMessage: MutableState<Boolean>,
     private val showYawnMessage: MutableState<Boolean>,
     private val fatigueDurationMillis: Long = 3000L,
-    private val eyeClosedThreshold: Float = 0.003f,
-    private val yawnThreshold: Float = 0.012f, // más sensible
+    private val eyeClosedThreshold: Float = 0.0035f,
+    private val yawnThreshold: Float = 0.009f, // más sensible
     private val yawnDurationMillis: Long = 1000L
 ) {
     private var eyeClosedStartTime: Long? = null
