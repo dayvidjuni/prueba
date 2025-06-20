@@ -9,7 +9,6 @@ import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.example.proyectoantifatiga.R
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
-import kotlinx.coroutines.*
 import kotlin.math.abs
 
 class FatigueDetector(
@@ -17,8 +16,8 @@ class FatigueDetector(
     private val showFatigueMessage: MutableState<Boolean>,
     private val showYawnMessage: MutableState<Boolean>,
     private val fatigueDurationMillis: Long = 3000L,
-    private val eyeClosedThreshold: Float = 0.003f,
-    private val yawnThreshold: Float = 0.012f, // más sensible
+    private val eyeClosedThreshold: Float = 0.0020f, // Ajustado con base en tu log
+    private val yawnThreshold: Float = 0.0080f,
     private val yawnDurationMillis: Long = 1000L
 ) {
     private var eyeClosedStartTime: Long? = null
@@ -27,7 +26,6 @@ class FatigueDetector(
     private var fatigueHandled = false
     private var yawnHandled = false
     private var lastYawnTime: Long = 0L
-    private val scope = CoroutineScope(Dispatchers.Main)
 
     fun checkFatigue(result: FaceLandmarkerResult) {
         val faces = result.faceLandmarks()
@@ -66,14 +64,12 @@ class FatigueDetector(
                 yawnHandled = true
                 lastYawnTime = System.currentTimeMillis()
 
-                scope.launch {
-                    delay(2000L)
-                    showYawnMessage.value = false
-                    yawnHandled = false
-                }
+                showYawnMessage.value = true
             }
         } else {
             mouthOpenStartTime = null
+            yawnHandled = false
+            showYawnMessage.value = false
         }
 
         // Ignorar fatiga si hubo bostezo reciente
@@ -89,25 +85,19 @@ class FatigueDetector(
             }
 
             val elapsed = System.currentTimeMillis() - eyeClosedStartTime!!
-            if (elapsed >= fatigueDurationMillis && !fatigueHandled) {
+            if (elapsed >= fatigueDurationMillis) {
                 showFatigueMessage.value = true
                 playAlarm()
                 fatigueHandled = true
-
-                scope.launch {
-                    delay(2000L)
-                    resetFatigue()
-                }
             }
         } else {
-            // Aquí es donde corregimos: si ya no hay fatiga, apaga alarma
+            eyeClosedStartTime = null
             if (fatigueHandled) {
                 stopAlarm()
                 showFatigueMessage.value = false
                 fatigueHandled = false
                 Log.d("FatigueDetector", "✅ Ojos abiertos, fatiga cancelada")
             }
-            eyeClosedStartTime = null
         }
     }
 
@@ -126,6 +116,7 @@ class FatigueDetector(
     }
 
     private fun playAlarm() {
+        if (mediaPlayer?.isPlaying == true) return
         stopAlarm()
         mediaPlayer = MediaPlayer.create(context.applicationContext, R.raw.alarma)
         mediaPlayer?.isLooping = true
