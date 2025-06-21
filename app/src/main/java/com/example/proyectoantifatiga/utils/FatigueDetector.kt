@@ -1,6 +1,7 @@
 package com.example.proyectoantifatiga.utils
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.VibrationEffect
@@ -9,15 +10,18 @@ import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.example.proyectoantifatiga.R
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+import kotlinx.coroutines.*
+import org.opencv.android.Utils
+import org.opencv.core.Mat
 import kotlin.math.abs
 
 class FatigueDetector(
     private val context: Context,
     private val showFatigueMessage: MutableState<Boolean>,
     private val showYawnMessage: MutableState<Boolean>,
-    private val fatigueDurationMillis: Long = 3000L,
-    private val eyeClosedThreshold: Float = 0.0020f, // Ajustado con base en tu log
-    private val yawnThreshold: Float = 0.0080f,
+    private val fatigueDurationMillis: Long = 2000L,
+    private val eyeClosedThreshold: Float = 0.0045f,
+    private val yawnThreshold: Float = 0.002f,
     private val yawnDurationMillis: Long = 1000L
 ) {
     private var eyeClosedStartTime: Long? = null
@@ -26,6 +30,7 @@ class FatigueDetector(
     private var fatigueHandled = false
     private var yawnHandled = false
     private var lastYawnTime: Long = 0L
+    private val scope = CoroutineScope(Dispatchers.Main)
 
     fun checkFatigue(result: FaceLandmarkerResult) {
         val faces = result.faceLandmarks()
@@ -41,17 +46,30 @@ class FatigueDetector(
             return
         }
 
+        // ✅ Procesar bitmap actual con OpenCV
+        val inputBitmap: Bitmap = BitmapUtils.latestBitmap ?: return
+        val mat = Mat()
+        Utils.bitmapToMat(inputBitmap, mat)
+        EyeDrawer.drawEyesAndEAR(mat, result)
+        // Aquí puedes mostrar o guardar `bitmapWithEyes` si lo deseas
+
+        // 👁 Cálculo de apertura de ojos (EAR simplificado)
         val leftEyeOpen = abs(landmarks[159].y() - landmarks[145].y())
         val rightEyeOpen = abs(landmarks[386].y() - landmarks[374].y())
-        val eyeAvg = (leftEyeOpen + rightEyeOpen) / 2f
+        val leftClosed = leftEyeOpen < eyeClosedThreshold
+        val rightClosed = rightEyeOpen < eyeClosedThreshold
+        val bothEyesClosed = leftClosed && rightClosed
 
+        Log.d("FatigueDetector", "👁️ Left: $leftEyeOpen | Right: $rightEyeOpen")
+
+        // 👄 Cálculo apertura de boca
         val upperLip = landmarks[13].y()
         val lowerLip = landmarks[14].y()
         val mouthOpen = abs(lowerLip - upperLip)
 
-        Log.d("FatigueDetector", "DEBUG => 👁️ Eye avg: $eyeAvg | 👄 Mouth: $mouthOpen")
+        Log.d("FatigueDetector", "👄 Mouth Open: $mouthOpen")
 
-        // Bostezo
+        // 😮 Detección de bostezo
         if (mouthOpen > yawnThreshold) {
             if (mouthOpenStartTime == null) {
                 mouthOpenStartTime = System.currentTimeMillis()
@@ -64,40 +82,46 @@ class FatigueDetector(
                 yawnHandled = true
                 lastYawnTime = System.currentTimeMillis()
 
-                showYawnMessage.value = true
+                scope.launch {
+                    delay(2000L)
+                    showYawnMessage.value = false
+                    yawnHandled = false
+                }
             }
         } else {
             mouthOpenStartTime = null
-            yawnHandled = false
-            showYawnMessage.value = false
         }
 
-        // Ignorar fatiga si hubo bostezo reciente
+        // Ignorar fatiga ocular si hubo bostezo reciente
         if (System.currentTimeMillis() - lastYawnTime < 2000L) {
             Log.d("FatigueDetector", "⏳ Ignorando fatiga tras bostezo reciente")
             return
         }
 
-        // Fatiga (ojos cerrados)
-        if (mouthOpen <= yawnThreshold && eyeAvg < eyeClosedThreshold) {
+        // 💤 Detección de fatiga ocular
+        if (mouthOpen <= yawnThreshold && bothEyesClosed) {
             if (eyeClosedStartTime == null) {
                 eyeClosedStartTime = System.currentTimeMillis()
             }
 
             val elapsed = System.currentTimeMillis() - eyeClosedStartTime!!
-            if (elapsed >= fatigueDurationMillis) {
+            if (elapsed >= fatigueDurationMillis && !fatigueHandled) {
                 showFatigueMessage.value = true
                 playAlarm()
                 fatigueHandled = true
+
+                scope.launch {
+                    delay(2000L) // muestra mensaje al menos 2s
+                }
             }
         } else {
-            eyeClosedStartTime = null
             if (fatigueHandled) {
                 stopAlarm()
                 showFatigueMessage.value = false
                 fatigueHandled = false
                 Log.d("FatigueDetector", "✅ Ojos abiertos, fatiga cancelada")
             }
+            eyeClosedStartTime = null
         }
     }
 
@@ -116,7 +140,6 @@ class FatigueDetector(
     }
 
     private fun playAlarm() {
-        if (mediaPlayer?.isPlaying == true) return
         stopAlarm()
         mediaPlayer = MediaPlayer.create(context.applicationContext, R.raw.alarma)
         mediaPlayer?.isLooping = true
@@ -132,7 +155,7 @@ class FatigueDetector(
     }
 
     private fun vibrate() {
-        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        val vibrator = context.getSystemService(Vibrator::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
         } else {

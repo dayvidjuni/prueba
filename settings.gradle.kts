@@ -28,3 +28,6 @@ dependencyResolutionManagement {
 }
 rootProject.name = "ProyectoAntifatiga"
 include(":app")
+include(":openCVLibrary")
+include(":app", ":openCVLibrary")
+

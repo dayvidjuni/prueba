@@ -12,10 +12,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +46,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        System.loadLibrary("opencv_java4")
+        try {
+            System.loadLibrary("opencv_java4")
+            Log.d("OpenCV", "✅ OpenCV cargado correctamente")
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e("OpenCV", "❌ Error cargando OpenCV: ${e.message}")
+        }
         val requestPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { isGranted ->
@@ -79,46 +82,32 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                if (showBlackScreen.value) {
-                    // Pantalla negra con detección activa
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Cámara invisible pero funcionando
-                        AndroidView(
-                            factory = { ctx ->
-                                val previewView = PreviewView(ctx)
-                                startCamera(previewView)
-                                previewView
-                            },
-                            modifier = Modifier
-                                .size(1.dp) // Casi invisible
-                                .align(Alignment.TopStart)
-                        )
+                val startCameraLambda: (PreviewView) -> Unit = { previewView ->
+                    this@MainActivity.startCamera(previewView)
+                }
 
-                        // Pantalla negra encima
-                        BlackScreenWithDetection(
-                            showFatigueMessage = showFatigueMessage,
-                            showYawnMessage = showYawnMessage,
-                            onBackClick = { showBlackScreen.value = false }
-                        )
-                    }
+                if (showBlackScreen.value) {
+                    BlackScreenWithDetection(
+                        showFatigueMessage = showFatigueMessage,
+                        showYawnMessage = showYawnMessage,
+                        onBackClick = { showBlackScreen.value = false },
+                        startCamera = startCameraLambda
+                    )
                 } else {
-                    // Pantalla de cámara con botón
                     FatigueUI(
                         showFatigueMessage = showFatigueMessage,
                         showYawnMessage = showYawnMessage,
                         previewView = {
                             Box(modifier = Modifier.fillMaxSize()) {
-                                // Vista de la cámara
                                 AndroidView(
                                     factory = { ctx ->
                                         val previewView = PreviewView(ctx)
-                                        startCamera(previewView)
+                                        startCameraLambda(previewView)
                                         previewView
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 )
 
-                                // Botón para ir a pantalla negra
                                 Button(
                                     onClick = { showBlackScreen.value = true },
                                     modifier = Modifier
@@ -211,12 +200,11 @@ class MainActivity : ComponentActivity() {
 fun BlackScreenWithDetection(
     showFatigueMessage: MutableState<Boolean>,
     showYawnMessage: MutableState<Boolean>,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    startCamera: (PreviewView) -> Unit
 ) {
-    // Estado para actualizar la hora cada segundo
     var currentTime by remember { mutableStateOf(getCurrentTime()) }
 
-    // Actualizar la hora cada segundo
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
@@ -229,7 +217,17 @@ fun BlackScreenWithDetection(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Hora en el centro
+        AndroidView(
+            factory = { ctx ->
+                val previewView = PreviewView(ctx)
+                startCamera(previewView)
+                previewView
+            },
+            modifier = Modifier
+                .size(1.dp)
+                .align(Alignment.TopStart)
+        )
+
         Text(
             text = currentTime,
             color = Color.White,
@@ -238,7 +236,6 @@ fun BlackScreenWithDetection(
             modifier = Modifier.align(Alignment.Center)
         )
 
-        // Mensajes de fatiga en la parte superior
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -276,7 +273,6 @@ fun BlackScreenWithDetection(
             }
         }
 
-        // Botón para volver
         Button(
             onClick = onBackClick,
             modifier = Modifier

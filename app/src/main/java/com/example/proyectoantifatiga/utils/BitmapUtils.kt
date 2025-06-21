@@ -1,13 +1,12 @@
 package com.example.proyectoantifatiga.utils
 
-import android.graphics.Bitmap
-import android.graphics.ImageFormat
-import android.graphics.Rect
-import android.graphics.YuvImage
+import android.graphics.*
 import androidx.camera.core.ImageProxy
 import java.io.ByteArrayOutputStream
 
 object BitmapUtils {
+    var latestBitmap: Bitmap? = null
+
     fun imageProxyToBitmap(proxy: ImageProxy): Bitmap {
         val y = proxy.planes[0].buffer
         val u = proxy.planes[1].buffer
@@ -25,7 +24,24 @@ object BitmapUtils {
         val out = ByteArrayOutputStream()
         yuvImage.compressToJpeg(Rect(0, 0, proxy.width, proxy.height), 100, out)
         val jpegBytes = out.toByteArray()
+        val bitmap = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
 
-        return android.graphics.BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+        // Rotar automáticamente según orientación
+        val rotatedBitmap = rotateBitmap(bitmap, proxy.imageInfo.rotationDegrees)
+
+        // Guardar el bitmap más reciente (para dibujar en FatigueDetector)
+        latestBitmap = rotatedBitmap
+
+        return rotatedBitmap
+    }
+
+    private fun rotateBitmap(bitmap: Bitmap, rotationDegrees: Int): Bitmap {
+        if (rotationDegrees == 0) return bitmap
+
+        val matrix = Matrix().apply {
+            postRotate(rotationDegrees.toFloat())
+        }
+
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 }

@@ -12,6 +12,12 @@ android {
         noCompress += listOf("tflite", "binarypb") // Necesario para MediaPipe Tasks
     }
 
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("libs") // Para MediaPipe y tus libs locales, si hay
+        }
+    }
+
     defaultConfig {
         applicationId = "com.example.proyectoantifatiga"
         minSdk = 24
@@ -50,9 +56,7 @@ android {
     }
 
     packagingOptions {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
 
@@ -66,6 +70,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation("androidx.compose.material:material-icons-extended:1.5.4")
 
     // CameraX
     implementation("androidx.camera:camera-core:1.3.0")
@@ -73,13 +78,18 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.0")
     implementation("androidx.camera:camera-view:1.3.0")
 
-
-    // MediaPipe Tasks (usa modelo .task)
+    // MediaPipe Tasks
     implementation("com.google.mediapipe:tasks-vision:0.10.21")
-    implementation ("com.google.accompanist:accompanist-permissions:0.32.0")
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
     implementation(libs.mediapipe.tasks.vision)
 
-    // Testing
+    // OpenCV desde Maven Central
+    implementation("org.opencv:opencv:4.11.0")
+
+    // ConstraintLayout si la usas en Compose
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+
+    // Test
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -87,8 +97,4 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-
-
 }
