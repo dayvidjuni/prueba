@@ -2,6 +2,8 @@ package com.example.proyectoantifatiga.utils
 
 import android.graphics.*
 import androidx.camera.core.ImageProxy
+import org.opencv.android.Utils
+import org.opencv.core.Mat
 import java.io.ByteArrayOutputStream
 
 object BitmapUtils {
@@ -43,5 +45,11 @@ object BitmapUtils {
         }
 
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    fun bitmapToMat(bitmap: Bitmap): Mat {
+        val mat = Mat()
+        Utils.bitmapToMat(bitmap, mat)
+        return mat
     }
 }

@@ -11,30 +11,26 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.example.proyectoantifatiga.screen.BlackScreenWithDetection
 import com.example.proyectoantifatiga.ui.FatigueUI
 import com.example.proyectoantifatiga.ui.theme.ProyectoAntifatigaTheme
 import com.example.proyectoantifatiga.utils.BitmapUtils
+import com.example.proyectoantifatiga.utils.EyeDrawer
 import com.example.proyectoantifatiga.utils.FatigueDetector
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
-import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
-import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
@@ -46,10 +42,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var fatigueDetector: FatigueDetector
     private var latestBitmap: Bitmap? = null
 
+    private val fatigueOverlayBitmap = mutableStateOf<Bitmap?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Cargar OpenCV
         try {
             System.loadLibrary("opencv_java4")
             Log.d("OpenCV", "✅ OpenCV cargado correctamente")
@@ -59,7 +56,9 @@ class MainActivity : ComponentActivity() {
 
         val requestPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()
-        ) { isGranted -> if (isGranted) setupFaceLandmarker() }
+        ) { isGranted ->
+            if (isGranted) setupFaceLandmarker()
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
@@ -90,15 +89,15 @@ class MainActivity : ComponentActivity() {
 
                 if (showBlackScreen.value) {
                     BlackScreenWithDetection(
-                        showFatigueMessage = showFatigueMessage,
-                        showYawnMessage = showYawnMessage,
+                        showFatigueMessage,
+                        showYawnMessage,
                         onBackClick = { showBlackScreen.value = false },
                         startCamera = startCameraLambda
                     )
                 } else {
                     FatigueUI(
-                        showFatigueMessage = showFatigueMessage,
-                        showYawnMessage = showYawnMessage,
+                        showFatigueMessage,
+                        showYawnMessage,
                         previewView = {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 AndroidView(
@@ -109,6 +108,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 )
+
                                 Button(
                                     onClick = { showBlackScreen.value = true },
                                     modifier = Modifier
@@ -135,17 +135,21 @@ class MainActivity : ComponentActivity() {
                 .setBaseOptions(baseOptions)
                 .setRunningMode(RunningMode.LIVE_STREAM)
                 .setResultListener { result, _ ->
-                    latestBitmap?.let {
-                        fatigueDetector.checkFatigue(result, it)
+                    latestBitmap?.let { bitmap ->
+                        fatigueDetector.checkFatigue(result, bitmap)
+
+                        // Dibujar ojos y EAR sobre la imagen actual
+                        val matBitmap = EyeDrawer.drawEyesAndEAR(BitmapUtils.bitmapToMat(bitmap), result)
+                        fatigueOverlayBitmap.value = matBitmap
                     }
                 }
                 .setErrorListener { e -> Log.e("MediaPipe", "Error: ${e.message}") }
                 .build()
 
             faceLandmarker = FaceLandmarker.createFromOptions(this, options)
-            Log.d("FaceLandmarker", "FaceLandmarker initialized successfully")
+            Log.d("FaceLandmarker", "✅ Inicializado correctamente")
         } catch (e: Exception) {
-            Log.e("FaceLandmarker", "Failed to initialize: ${e.message}")
+            Log.e("FaceLandmarker", "❌ Error inicializando: ${e.message}")
         }
     }
 
@@ -164,6 +168,7 @@ class MainActivity : ComponentActivity() {
                         if (::faceLandmarker.isInitialized) {
                             val bitmap = BitmapUtils.imageProxyToBitmap(imageProxy)
                             latestBitmap = bitmap
+
                             val mpImage = BitmapImageBuilder(bitmap).build()
                             faceLandmarker.detectAsync(
                                 mpImage,
@@ -172,7 +177,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     } catch (e: Exception) {
-                        Log.e("Analyzer", "Error processing image: ${e.message}")
+                        Log.e("Analyzer", "❌ Error procesando imagen: ${e.message}")
                     } finally {
                         imageProxy.close()
                     }
@@ -185,103 +190,15 @@ class MainActivity : ComponentActivity() {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
 
-                Log.d("Camera", "Camera started successfully")
+                Log.d("Camera", "📷 Cámara iniciada")
             } catch (e: Exception) {
-                Log.e("Camera", "Failed to start camera: ${e.message}")
+                Log.e("Camera", "❌ Error iniciando cámara: ${e.message}")
             }
         }, ContextCompat.getMainExecutor(this))
     }
-}
 
-@Composable
-fun BlackScreenWithDetection(
-    showFatigueMessage: MutableState<Boolean>,
-    showYawnMessage: MutableState<Boolean>,
-    onBackClick: () -> Unit,
-    startCamera: (PreviewView) -> Unit
-) {
-    var currentTime by remember { mutableStateOf(getCurrentTime()) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            currentTime = getCurrentTime()
-        }
+    private fun getCurrentTime(): String {
+        val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        return sdf.format(Date())
     }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        AndroidView(
-            factory = { ctx ->
-                val previewView = PreviewView(ctx)
-                startCamera(previewView)
-                previewView
-            },
-            modifier = Modifier
-                .size(1.dp)
-                .align(Alignment.TopStart)
-        )
-
-        Text(
-            text = currentTime,
-            color = Color.White,
-            fontSize = 48.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.Center)
-        )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (showFatigueMessage.value) {
-                Card(
-                    modifier = Modifier.padding(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Red.copy(alpha = 0.9f))
-                ) {
-                    Text(
-                        text = "¡FATIGA DETECTADA!",
-                        modifier = Modifier.padding(16.dp),
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            if (showYawnMessage.value) {
-                Card(
-                    modifier = Modifier.padding(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Yellow.copy(alpha = 0.9f))
-                ) {
-                    Text(
-                        text = "Bostezo detectado",
-                        modifier = Modifier.padding(16.dp),
-                        color = Color.Black,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        Button(
-            onClick = onBackClick,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp)
-        ) {
-            Text("Volver a Cámara", color = Color.White)
-        }
-    }
-}
-
-private fun getCurrentTime(): String {
-    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    return sdf.format(Date())
 }
