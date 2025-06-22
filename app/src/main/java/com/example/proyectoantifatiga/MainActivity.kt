@@ -2,6 +2,7 @@ package com.example.proyectoantifatiga
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -43,21 +44,22 @@ class MainActivity : ComponentActivity() {
     private lateinit var faceLandmarker: FaceLandmarker
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var fatigueDetector: FatigueDetector
+    private var latestBitmap: Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        System.loadLibrary("opencv_java4")
+
+        // Cargar OpenCV
         try {
             System.loadLibrary("opencv_java4")
             Log.d("OpenCV", "✅ OpenCV cargado correctamente")
         } catch (e: UnsatisfiedLinkError) {
             Log.e("OpenCV", "❌ Error cargando OpenCV: ${e.message}")
         }
+
         val requestPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()
-        ) { isGranted ->
-            if (isGranted) setupFaceLandmarker()
-        }
+        ) { isGranted -> if (isGranted) setupFaceLandmarker() }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
@@ -83,7 +85,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val startCameraLambda: (PreviewView) -> Unit = { previewView ->
-                    this@MainActivity.startCamera(previewView)
+                    startCamera(previewView)
                 }
 
                 if (showBlackScreen.value) {
@@ -107,7 +109,6 @@ class MainActivity : ComponentActivity() {
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 )
-
                                 Button(
                                     onClick = { showBlackScreen.value = true },
                                     modifier = Modifier
@@ -134,8 +135,9 @@ class MainActivity : ComponentActivity() {
                 .setBaseOptions(baseOptions)
                 .setRunningMode(RunningMode.LIVE_STREAM)
                 .setResultListener { result, _ ->
-                    Log.d("FaceLandmarker", "Face detected: ${result.faceLandmarks().size} faces")
-                    onResult(result)
+                    latestBitmap?.let {
+                        fatigueDetector.checkFatigue(result, it)
+                    }
                 }
                 .setErrorListener { e -> Log.e("MediaPipe", "Error: ${e.message}") }
                 .build()
@@ -144,12 +146,6 @@ class MainActivity : ComponentActivity() {
             Log.d("FaceLandmarker", "FaceLandmarker initialized successfully")
         } catch (e: Exception) {
             Log.e("FaceLandmarker", "Failed to initialize: ${e.message}")
-        }
-    }
-
-    private fun onResult(result: FaceLandmarkerResult) {
-        if (::fatigueDetector.isInitialized) {
-            fatigueDetector.checkFatigue(result)
         }
     }
 
@@ -167,6 +163,7 @@ class MainActivity : ComponentActivity() {
                     try {
                         if (::faceLandmarker.isInitialized) {
                             val bitmap = BitmapUtils.imageProxyToBitmap(imageProxy)
+                            latestBitmap = bitmap
                             val mpImage = BitmapImageBuilder(bitmap).build()
                             faceLandmarker.detectAsync(
                                 mpImage,

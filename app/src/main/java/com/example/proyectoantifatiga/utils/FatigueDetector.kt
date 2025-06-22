@@ -12,27 +12,35 @@ import com.example.proyectoantifatiga.R
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import kotlinx.coroutines.*
 import org.opencv.android.Utils
-import org.opencv.core.Mat
+import org.opencv.core.*
+import org.opencv.imgproc.Imgproc
 import kotlin.math.abs
 
 class FatigueDetector(
     private val context: Context,
     private val showFatigueMessage: MutableState<Boolean>,
     private val showYawnMessage: MutableState<Boolean>,
-    private val fatigueDurationMillis: Long = 2000L,
-    private val eyeClosedThreshold: Float = 0.0045f,
-    private val yawnThreshold: Float = 0.002f,
-    private val yawnDurationMillis: Long = 1000L
+    private val fatigueFrameThreshold: Int = 15,
+    private val earSampleFrames: Int = 30
 ) {
-    private var eyeClosedStartTime: Long? = null
-    private var mouthOpenStartTime: Long? = null
+    private var eyeClosedFrameCount = 0
     private var mediaPlayer: MediaPlayer? = null
     private var fatigueHandled = false
     private var yawnHandled = false
     private var lastYawnTime: Long = 0L
     private val scope = CoroutineScope(Dispatchers.Main)
 
-    fun checkFatigue(result: FaceLandmarkerResult) {
+    private val earSamples = mutableListOf<Float>()
+    private var initialEarAverage: Float = -1f
+    private val earClosedRatio = 0.6f
+
+    // Yawn config
+    private val yawnVerticalThreshold = 0.04f
+    private val yawnContourAreaThreshold = 500.0
+    private val yawnFrameThreshold = 10
+    private var yawnFrameCount = 0
+
+    fun checkFatigue(result: FaceLandmarkerResult, bitmap: Bitmap) {
         val faces = result.faceLandmarks()
         if (faces.size != 1) {
             reset()
@@ -41,102 +49,116 @@ class FatigueDetector(
 
         val landmarks = faces.first()
         if (landmarks.size <= 386) {
-            Log.w("FatigueDetector", "⚠️ Landmarks incompletos. Frame ignorado.")
+            Log.w("FatigueDetector", "⚠️ Landmarks incompletos")
             reset()
             return
         }
 
-        // ✅ Procesar bitmap actual con OpenCV
-        val inputBitmap: Bitmap = BitmapUtils.latestBitmap ?: return
-        val mat = Mat()
-        Utils.bitmapToMat(inputBitmap, mat)
-        EyeDrawer.drawEyesAndEAR(mat, result)
-        // Aquí puedes mostrar o guardar `bitmapWithEyes` si lo deseas
-
-        // 👁 Cálculo de apertura de ojos (EAR simplificado)
+        // EAR (ojos)
         val leftEyeOpen = abs(landmarks[159].y() - landmarks[145].y())
         val rightEyeOpen = abs(landmarks[386].y() - landmarks[374].y())
-        val leftClosed = leftEyeOpen < eyeClosedThreshold
-        val rightClosed = rightEyeOpen < eyeClosedThreshold
-        val bothEyesClosed = leftClosed && rightClosed
+        val avgEAR = ((leftEyeOpen + rightEyeOpen) / 2f)
 
-        Log.d("FatigueDetector", "👁️ Left: $leftEyeOpen | Right: $rightEyeOpen")
-
-        // 👄 Cálculo apertura de boca
-        val upperLip = landmarks[13].y()
-        val lowerLip = landmarks[14].y()
-        val mouthOpen = abs(lowerLip - upperLip)
-
-        Log.d("FatigueDetector", "👄 Mouth Open: $mouthOpen")
-
-        // 😮 Detección de bostezo
-        if (mouthOpen > yawnThreshold) {
-            if (mouthOpenStartTime == null) {
-                mouthOpenStartTime = System.currentTimeMillis()
+        if (earSamples.size < earSampleFrames) {
+            earSamples.add(avgEAR)
+            if (earSamples.size == earSampleFrames) {
+                initialEarAverage = earSamples.average().toFloat()
+                Log.d("FatigueDetector", "🎯 EAR baseline: $initialEarAverage")
             }
+            return
+        }
 
-            val elapsed = System.currentTimeMillis() - mouthOpenStartTime!!
-            if (elapsed >= yawnDurationMillis && !yawnHandled) {
+        if (initialEarAverage <= 0f) return
+
+        val dynamicThreshold = initialEarAverage * earClosedRatio
+        val eyesClosed = avgEAR < dynamicThreshold
+        Log.d("FatigueDetector", "👁️ EAR: $avgEAR | Umbral: $dynamicThreshold")
+
+        // Bostezo (combinado)
+        val mouthOpen = abs(landmarks[14].y() - landmarks[13].y())
+        val validVertical = mouthOpen > yawnVerticalThreshold
+
+        // ROI de la boca usando landmarks
+        val mouthTop = landmarks[13]
+        val mouthBottom = landmarks[14]
+        val mouthLeft = landmarks[78]
+        val mouthRight = landmarks[308]
+
+        val rectX = (mouthLeft.x() * bitmap.width).toInt()
+        val rectY = (mouthTop.y() * bitmap.height).toInt()
+        val rectWidth = ((mouthRight.x() - mouthLeft.x()) * bitmap.width).toInt()
+        val rectHeight = ((mouthBottom.y() - mouthTop.y()) * bitmap.height).toInt()
+
+        if (rectWidth <= 0 || rectHeight <= 0) return
+
+        val mouthROI = Rect(rectX, rectY, rectWidth, rectHeight)
+
+        val mat = Mat()
+        Utils.bitmapToMat(bitmap, mat)
+        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGB2GRAY)
+        val roi = Mat(mat, mouthROI)
+        Imgproc.GaussianBlur(roi, roi, Size(3.0, 3.0), 0.0)
+        Imgproc.threshold(roi, roi, 50.0, 255.0, Imgproc.THRESH_BINARY)
+
+        val contours = mutableListOf<MatOfPoint>()
+        Imgproc.findContours(roi.clone(), contours, Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+
+        var foundLargeContour = false
+        for (contour in contours) {
+            val area = Imgproc.contourArea(contour)
+            Log.d("YawnDetection", "🔍 Contour area: $area")
+            if (area > yawnContourAreaThreshold) {
+                foundLargeContour = true
+                break
+            }
+        }
+
+        if (validVertical && foundLargeContour) {
+            yawnFrameCount++
+            if (yawnFrameCount >= yawnFrameThreshold && !yawnHandled) {
                 showYawnMessage.value = true
                 vibrate()
                 yawnHandled = true
                 lastYawnTime = System.currentTimeMillis()
-
                 scope.launch {
-                    delay(2000L)
+                    delay(2000)
                     showYawnMessage.value = false
                     yawnHandled = false
                 }
             }
         } else {
-            mouthOpenStartTime = null
+            yawnFrameCount = 0
         }
 
-        // Ignorar fatiga ocular si hubo bostezo reciente
+        // Ignorar fatiga tras bostezo reciente
         if (System.currentTimeMillis() - lastYawnTime < 2000L) {
-            Log.d("FatigueDetector", "⏳ Ignorando fatiga tras bostezo reciente")
+            eyeClosedFrameCount = 0
             return
         }
 
-        // 💤 Detección de fatiga ocular
-        if (mouthOpen <= yawnThreshold && bothEyesClosed) {
-            if (eyeClosedStartTime == null) {
-                eyeClosedStartTime = System.currentTimeMillis()
-            }
-
-            val elapsed = System.currentTimeMillis() - eyeClosedStartTime!!
-            if (elapsed >= fatigueDurationMillis && !fatigueHandled) {
+        if (eyesClosed) {
+            eyeClosedFrameCount++
+            if (eyeClosedFrameCount >= fatigueFrameThreshold && !fatigueHandled) {
                 showFatigueMessage.value = true
                 playAlarm()
                 fatigueHandled = true
-
-                scope.launch {
-                    delay(2000L) // muestra mensaje al menos 2s
-                }
             }
         } else {
             if (fatigueHandled) {
-                stopAlarm()
                 showFatigueMessage.value = false
+                stopAlarm()
                 fatigueHandled = false
-                Log.d("FatigueDetector", "✅ Ojos abiertos, fatiga cancelada")
             }
-            eyeClosedStartTime = null
+            eyeClosedFrameCount = 0
         }
     }
 
     private fun reset() {
-        resetFatigue()
-        showYawnMessage.value = false
-        yawnHandled = false
-        mouthOpenStartTime = null
-    }
-
-    private fun resetFatigue() {
-        eyeClosedStartTime = null
         showFatigueMessage.value = false
+        showYawnMessage.value = false
+        eyeClosedFrameCount = 0
+        yawnFrameCount = 0
         stopAlarm()
-        fatigueHandled = false
     }
 
     private fun playAlarm() {
@@ -144,14 +166,12 @@ class FatigueDetector(
         mediaPlayer = MediaPlayer.create(context.applicationContext, R.raw.alarma)
         mediaPlayer?.isLooping = true
         mediaPlayer?.start()
-        Log.d("FatigueDetector", "🔔 Alarma iniciada")
     }
 
     private fun stopAlarm() {
         mediaPlayer?.stop()
         mediaPlayer?.release()
         mediaPlayer = null
-        Log.d("FatigueDetector", "🔕 Alarma detenida")
     }
 
     private fun vibrate() {
@@ -162,6 +182,5 @@ class FatigueDetector(
             @Suppress("DEPRECATION")
             vibrator.vibrate(300)
         }
-        Log.d("FatigueDetector", "📳 Vibración activada por bostezo")
     }
 }

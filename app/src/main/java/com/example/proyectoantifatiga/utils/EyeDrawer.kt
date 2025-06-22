@@ -1,21 +1,20 @@
 package com.example.proyectoantifatiga.utils
 
-import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
-import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+import android.graphics.Bitmap
+import org.opencv.android.Utils
 import org.opencv.core.Mat
 import org.opencv.core.Point
 import org.opencv.core.Scalar
 import org.opencv.imgproc.Imgproc
-import kotlin.math.hypot
+import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 
 object EyeDrawer {
 
     private val leftEyeIndices = listOf(33, 160, 158, 133, 153, 144)
     private val rightEyeIndices = listOf(362, 385, 387, 263, 373, 380)
 
-    fun drawEyesAndEAR(mat: Mat, result: FaceLandmarkerResult) {
-        if (result.faceLandmarks().isEmpty()) return
-
+    fun drawEyesAndEAR(mat: Mat, result: FaceLandmarkerResult): Bitmap {
+        if (result.faceLandmarks().isEmpty()) return Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888)
         val landmarks = result.faceLandmarks()[0]
 
         val leftEAR = drawEyeAndCalculateEAR(mat, landmarks, leftEyeIndices)
@@ -33,18 +32,22 @@ object EyeDrawer {
             Scalar(0.0, 255.0, 0.0),
             2
         )
+
+        // Convertir de Mat a Bitmap para retornar
+        val outputBitmap = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(mat, outputBitmap)
+        return outputBitmap
     }
 
     private fun drawEyeAndCalculateEAR(
         mat: Mat,
-        landmarks: List<NormalizedLandmark>,
+        landmarks: List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>,
         indices: List<Int>
     ): Double {
         val points = indices.map { index ->
             Point(
                 (landmarks[index].x() * mat.width()).toDouble(),
                 (landmarks[index].y() * mat.height()).toDouble()
-
             )
         }
 
@@ -62,6 +65,6 @@ object EyeDrawer {
     }
 
     private fun distance(p1: Point, p2: Point): Double {
-        return hypot(p2.x - p1.x, p2.y - p1.y)
+        return Math.hypot(p2.x - p1.x, p2.y - p1.y)
     }
 }
