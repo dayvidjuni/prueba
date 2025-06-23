@@ -11,11 +11,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -41,7 +43,6 @@ class MainActivity : ComponentActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var fatigueDetector: FatigueDetector
     private var latestBitmap: Bitmap? = null
-
     private val fatigueOverlayBitmap = mutableStateOf<Bitmap?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,6 +75,7 @@ class MainActivity : ComponentActivity() {
                 val showFatigueMessage = remember { mutableStateOf(false) }
                 val showYawnMessage = remember { mutableStateOf(false) }
                 val showBlackScreen = remember { mutableStateOf(false) }
+                val overlayBitmap = remember { fatigueOverlayBitmap }
 
                 fatigueDetector = remember {
                     FatigueDetector(
@@ -100,6 +102,8 @@ class MainActivity : ComponentActivity() {
                         showYawnMessage,
                         previewView = {
                             Box(modifier = Modifier.fillMaxSize()) {
+                                val bitmapToDraw by overlayBitmap
+
                                 AndroidView(
                                     factory = { ctx ->
                                         val previewView = PreviewView(ctx)
@@ -108,6 +112,16 @@ class MainActivity : ComponentActivity() {
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 )
+
+                                bitmapToDraw?.let { bitmap ->
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .align(Alignment.Center)
+                                    )
+                                }
 
                                 Button(
                                     onClick = { showBlackScreen.value = true },
@@ -125,6 +139,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 🔧 FUNCIONES MOVIDAS FUERA DE onCreate()
+
     private fun setupFaceLandmarker() {
         try {
             val baseOptions = BaseOptions.builder()
@@ -138,8 +154,10 @@ class MainActivity : ComponentActivity() {
                     latestBitmap?.let { bitmap ->
                         fatigueDetector.checkFatigue(result, bitmap)
 
-                        // Dibujar ojos y EAR sobre la imagen actual
-                        val matBitmap = EyeDrawer.drawEyesAndEAR(BitmapUtils.bitmapToMat(bitmap), result)
+                        val matBitmap = EyeDrawer.drawEyesAndEAR(
+                            BitmapUtils.bitmapToMat(bitmap),
+                            result
+                        )
                         fatigueOverlayBitmap.value = matBitmap
                     }
                 }
