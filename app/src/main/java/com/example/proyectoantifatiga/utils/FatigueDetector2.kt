@@ -6,11 +6,10 @@ import android.media.ToneGenerator
 import android.os.Vibrator
 import android.os.VibrationEffect
 import android.util.Log
-import android.widget.Toast
 import androidx.compose.runtime.MutableState
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 
-class FatigueDetector(
+class FatigueDetectors(
     private val context: Context,
     private val showFatigueMessage: MutableState<Boolean>,
     private val showYawnMessage: MutableState<Boolean>
