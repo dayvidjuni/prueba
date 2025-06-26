@@ -15,11 +15,11 @@ import kotlinx.coroutines.withContext
 import kotlin.math.hypot
 
 class FatigueDetector(private val context: Context) {
-
+    private var tiempoOjosCerrados: Long = 0
+    private var inicioCierreOjos: Long = 0
     var onFatigueDetected: ((ResultadoFatiga) -> Unit)? = null
     var ultimaLandmarks: List<NormalizedLandmark>? = null
         private set
-
     suspend fun detectAsync(bitmap: Bitmap) {
         val result = analizarFatiga(bitmap)
         onFatigueDetected?.invoke(result)
@@ -48,7 +48,20 @@ class FatigueDetector(private val context: Context) {
                 ultimaLandmarks = landmarks
 
                 val ear = calcularEAR(landmarks)
-                val estaFatigado = ear < 0.12f
+                val ojosCerrados = ear < 0.21f  // Usa tu mismo umbral EAR
+
+                if (ojosCerrados) {
+                    if (inicioCierreOjos == 0L) {
+                        inicioCierreOjos = System.currentTimeMillis()
+                    } else {
+                        tiempoOjosCerrados = System.currentTimeMillis() - inicioCierreOjos
+                    }
+                } else {
+                    inicioCierreOjos = 0
+                    tiempoOjosCerrados = 0
+                }
+
+                val estaFatigado = tiempoOjosCerrados >= 2000L
                 ResultadoFatiga(ear, estaFatigado, landmarks)
             } else {
                 ultimaLandmarks = null
