@@ -15,6 +15,10 @@ import com.example.proyectoantifatiga.detector.FatigueDetector
 
 // camera/CameraController.kt
 class CameraController(
+
+
+
+
     private val context: Context,
     private val lensFacing: Int = CameraSelector.LENS_FACING_FRONT,
     private val detector: FatigueDetector

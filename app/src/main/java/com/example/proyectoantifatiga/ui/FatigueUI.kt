@@ -27,7 +27,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.proyectoantifatiga.ui.components.HeaderImage
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
+import com.example.proyectoantifatiga.R
 
 @Composable
 fun FatigueUI(
@@ -62,6 +64,19 @@ fun FatigueUI(
             }
         }
 
+        // Logo en la parte superior izquierda - SIEMPRE VISIBLE
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.TopStart
+        ) {
+            HeaderImage(
+                logoResourceId = R.drawable.sistemas1,
+                modifier = Modifier
+            )
+        }
+
         val fatigue = fatigueLevel.value
         val blink = blinkRate.value
         val showFatigue by remember { showFatigueMessage }
@@ -72,7 +87,8 @@ fun FatigueUI(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(16.dp)
+                .padding(top = 100.dp), // Más espacio para el logo más grande
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (warnDistance) {

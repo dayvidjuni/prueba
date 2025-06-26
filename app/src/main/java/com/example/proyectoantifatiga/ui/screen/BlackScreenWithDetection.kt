@@ -27,7 +27,6 @@ import java.util.*
 fun BlackScreenWithDetection() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
     var showCamera by remember { mutableStateOf(false) }
     var currentTime by remember { mutableStateOf("") }
     val bitmap = remember { mutableStateOf<Bitmap?>(null) }

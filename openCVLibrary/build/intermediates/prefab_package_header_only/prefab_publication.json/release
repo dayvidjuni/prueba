@@ -1,5 +1,5 @@
 {
-  "installationFolder": "C:\\Users\\HP\\AndroidStudioProjects\\ProyectoAntifatiga\\openCVLibrary\\build\\intermediates\\prefab_package\\release\\prefab",
+  "installationFolder": "U:\\UNIVERSIDAD\\prueba\\openCVLibrary\\build\\intermediates\\prefab_package\\release\\prefab",
   "gradlePath": ":openCVLibrary",
   "packageInfo": {
     "packageName": "openCVLibrary",
@@ -8,7 +8,7 @@
     "modules": [
       {
         "moduleName": "opencv_jni_shared",
-        "moduleHeaders": "C:\\Users\\HP\\AndroidStudioProjects\\ProyectoAntifatiga\\openCVLibrary\\native\\jni\\include",
+        "moduleHeaders": "U:\\UNIVERSIDAD\\prueba\\openCVLibrary\\native\\jni\\include",
         "moduleExportLibraries": [],
         "abis": []
       }

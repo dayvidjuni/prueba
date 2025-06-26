@@ -7,7 +7,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.example.proyectoantifatiga.ui.screen.BlackScreenWithDetection
@@ -24,6 +29,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun PantallaPrincipal() {
+
     val context = LocalContext.current
     var permissionGranted by remember { mutableStateOf(false) }
 
@@ -32,11 +38,12 @@ fun PantallaPrincipal() {
     ) { isGranted ->
         permissionGranted = isGranted
     }
-
     LaunchedEffect(Unit) {
+
         when (PackageManager.PERMISSION_GRANTED) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) -> {
                 permissionGranted = true
+
             }
             else -> {
                 requestPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -46,5 +53,6 @@ fun PantallaPrincipal() {
 
     if (permissionGranted) {
         BlackScreenWithDetection()
+        }
+
     }
-}
