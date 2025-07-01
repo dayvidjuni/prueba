@@ -40,6 +40,8 @@ fun BlackScreenWithDetection() {
     val tasaParpadeo = remember { mutableStateOf(0) }
     val ear = remember { mutableStateOf(0.25f) }
     val rostroDetectado = remember { mutableStateOf(false) }
+    val showFatigueMessage = remember { mutableStateOf(false) }
+
 
     val detector = remember {
         FatigueDetector(context).apply {
@@ -47,7 +49,7 @@ fun BlackScreenWithDetection() {
                 ultimaLandmarks.value = resultado.landmarks
                 ear.value = resultado.ear
                 estaFatigado.value = resultado.estaFatigado
-                // Puedes ajustar nivelFatiga o tasaParpadeo aquí si lo usas
+                showFatigueMessage.value = resultado.estaFatigado // 👈 AÑADIR ESTO
 
                 if (resultado.estaFatigado) {
                     ServicioFatiga.iniciarAlarma(context)
@@ -57,10 +59,10 @@ fun BlackScreenWithDetection() {
 
                 if (bitmap.value != null && resultado.landmarks != null) {
                     val bmpConOjos = EyeDrawer.drawEyes(bitmap.value!!, resultado.landmarks)
-
                     bitmap.value = bmpConOjos
                 }
             }
+
         }
     }
 
@@ -89,37 +91,43 @@ fun BlackScreenWithDetection() {
     }
 
     // 🖤 UI
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        if (showCamera) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { cameraView }
-            )
+    Box(modifier = Modifier.fillMaxSize()) {
 
-            FatigueUI(
-                showFatigueMessage = estaFatigado,
-                showYawnMessage = estaBostezo,
-                previewView = {}, // Vista ya está mostrada arriba
-                eyeLandmarks = ultimaLandmarks.value,
-                fatigueLevel = nivelFatiga,
-                distanceWarning = advertenciaDistancia,
-                blinkRate = tasaParpadeo,
-                eyeAspectRatio = ear,
-                faceDetected = rostroDetectado
-            )
-        } else {
-            Text(
-                text = currentTime,
-                color = Color.White,
-                fontSize = 48.sp,
-                modifier = Modifier.align(Alignment.Center)
-            )
+        // 1. Cámara siempre activa (invisible si se cubre con capa negra)
+        AndroidView(
+            factory = { cameraView },
+            modifier = Modifier.fillMaxSize()
+        )
+
+
+        // 3. Pantalla negra solo como máscara visual (NO debe tapar FatigueUI)
+        if (!showCamera) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                Text(
+                    text = currentTime,
+                    color = Color.White,
+                    fontSize = 48.sp,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
         }
-
+        // 2. Interfaz de alertas y visualización de fatiga
+        FatigueUI(
+            showFatigueMessage = showFatigueMessage,
+            showYawnMessage = estaBostezo,
+            previewView = {}, // no mostramos la cámara aquí
+            eyeLandmarks = if (showCamera) ultimaLandmarks.value else null, // oculta puntos cuando la cámara no está visible
+            fatigueLevel = nivelFatiga,
+            distanceWarning = advertenciaDistancia,
+            blinkRate = tasaParpadeo,
+            eyeAspectRatio = ear,
+            faceDetected = rostroDetectado
+        )
+        // 4. Botón de mostrar/ocultar cámara
         Button(
             onClick = { showCamera = !showCamera },
             modifier = Modifier
@@ -129,6 +137,8 @@ fun BlackScreenWithDetection() {
             Text(if (showCamera) "Ocultar Cámara" else "Mostrar Cámara")
         }
     }
+
+
     LaunchedEffect(bitmap.value) {
         bitmap.value?.let {
             detector.detectAsync(it)
