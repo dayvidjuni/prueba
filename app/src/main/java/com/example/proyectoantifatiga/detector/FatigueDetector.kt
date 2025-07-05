@@ -18,6 +18,7 @@ class FatigueDetector(private val context: Context) {
     private var tiempoOjosCerrados: Long = 0
     private var inicioCierreOjos: Long = 0
     var onFatigueDetected: ((ResultadoFatiga) -> Unit)? = null
+    var onFaceDetected: ((Boolean) -> Unit)? = null
     var ultimaLandmarks: List<NormalizedLandmark>? = null
         private set
     suspend fun detectAsync(bitmap: Bitmap) {
@@ -46,7 +47,7 @@ class FatigueDetector(private val context: Context) {
             if (result.faceLandmarks().isNotEmpty()) {
                 val landmarks = result.faceLandmarks()[0]
                 ultimaLandmarks = landmarks
-
+                onFaceDetected?.invoke(true)
                 val ear = calcularEAR(landmarks)
                 val ojosCerrados = ear < 0.21f  // Usa tu mismo umbral EAR
 
@@ -65,6 +66,7 @@ class FatigueDetector(private val context: Context) {
                 ResultadoFatiga(ear, estaFatigado, landmarks)
             } else {
                 ultimaLandmarks = null
+                onFaceDetected?.invoke(false)
                 ResultadoFatiga(ear = 1.0f, estaFatigado = false, landmarks = null)
             }
         }

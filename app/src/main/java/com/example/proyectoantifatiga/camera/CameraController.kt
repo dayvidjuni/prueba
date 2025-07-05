@@ -12,12 +12,14 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.example.proyectoantifatiga.detector.FatigueDetector
+import com.example.proyectoantifatiga.detector.HeadDownDetector
 
 // camera/CameraController.kt
 class CameraController(
     private val context: Context,
     private val lensFacing: Int = CameraSelector.LENS_FACING_FRONT,
-    private val detector: FatigueDetector
+    private val detector: FatigueDetector,
+    private val headDownDetector: HeadDownDetector
 
 ) {
     private var onBitmapReady: ((Bitmap) -> Unit)? = null
@@ -37,8 +39,12 @@ class CameraController(
             }
 
             val analyzer = ImageAnalysis.Builder().build().apply {
-                setAnalyzer(ContextCompat.getMainExecutor(context), ImageAnalyzer(detector))
+                setAnalyzer(
+                    ContextCompat.getMainExecutor(context),
+                    ImageAnalyzer(detector, headDownDetector) // 👈 Aquí ambos
+                )
             }
+
 
             val cameraSelector = CameraSelector.Builder()
                 .requireLensFacing(lensFacing)

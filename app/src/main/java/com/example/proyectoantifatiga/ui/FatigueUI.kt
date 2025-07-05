@@ -39,7 +39,9 @@ fun FatigueUI(
     distanceWarning: MutableState<Boolean> = mutableStateOf(false),
     blinkRate: MutableState<Int> = mutableStateOf(0),
     eyeAspectRatio: MutableState<Float> = mutableStateOf(0.25f),
-    faceDetected: MutableState<Boolean> = mutableStateOf(false)
+    faceDetected: MutableState<Boolean> = mutableStateOf(false),
+    headDownDetected: MutableState<Boolean>
+
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         previewView()
@@ -68,6 +70,8 @@ fun FatigueUI(
         val showYawn by remember { showYawnMessage }
         val warnDistance by remember { distanceWarning }
         val faceOk by remember { faceDetected }
+        val showHeadDown by remember { headDownDetected }
+
 
         Column(
             modifier = Modifier
@@ -108,6 +112,16 @@ fun FatigueUI(
                     urgent = true
                 )
             }
+            AnimatedVisibility(visible = showHeadDown, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+                AlertCard(
+                    title = "¡CABEZA AGACHADA!",
+                    message = "Mantén la cabeza erguida para evitar somnolencia.",
+                    icon = Icons.Default.Warning,
+                    color = Color(0xFF8E24AA), // morado
+                    urgent = true
+                )
+            }
+
 
             if (faceOk && !showFatigue) {
                 Spacer(modifier = Modifier.height(16.dp))

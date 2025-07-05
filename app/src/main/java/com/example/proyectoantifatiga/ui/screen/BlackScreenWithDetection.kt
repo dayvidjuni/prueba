@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.proyectoantifatiga.detector.HeadDownDetector
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.proyectoantifatiga.camera.CameraController
 import com.example.proyectoantifatiga.detector.EyeDrawer
@@ -31,6 +32,8 @@ fun BlackScreenWithDetection() {
     var showCamera by remember { mutableStateOf(false) }
     var currentTime by remember { mutableStateOf("") }
     val bitmap = remember { mutableStateOf<Bitmap?>(null) }
+    val cabezaAgachada = remember { mutableStateOf(false) }
+
 
     // 👉 Variables compartidas
     val ultimaLandmarks = remember { mutableStateOf<List<NormalizedLandmark>?>(null) }
@@ -42,6 +45,7 @@ fun BlackScreenWithDetection() {
     val ear = remember { mutableStateOf(0.25f) }
     val rostroDetectado = remember { mutableStateOf(false) }
     val showFatigueMessage = remember { mutableStateOf(false) }
+    val headDownDetector = remember { HeadDownDetector(context) }
 
 
     val detector = remember {
@@ -71,11 +75,20 @@ fun BlackScreenWithDetection() {
         CameraController(
             context = context,
             lensFacing = CameraSelector.LENS_FACING_FRONT,
-            detector = detector
+            detector = detector,
+            headDownDetector = headDownDetector
         ).apply {
             setOnBitmapReadyListener { bmp ->
                 bitmap.value = bmp
             }
+        }
+    }
+
+
+    LaunchedEffect(Unit) {
+        headDownDetector.onHeadDownDetected = {
+            cabezaAgachada.value = true
+            ServicioFatiga.iniciarAlarma(context) // o muestra un mensaje visual
         }
     }
 
@@ -126,7 +139,8 @@ fun BlackScreenWithDetection() {
             distanceWarning = advertenciaDistancia,
             blinkRate = tasaParpadeo,
             eyeAspectRatio = ear,
-            faceDetected = rostroDetectado
+            faceDetected = rostroDetectado,
+            headDownDetected = cabezaAgachada
         )
         // 4. Botón de mostrar/ocultar cámara
         Button(
@@ -140,9 +154,14 @@ fun BlackScreenWithDetection() {
     }
 
 
-    LaunchedEffect(bitmap.value) {
-        bitmap.value?.let {
-            detector.detectAsync(it)
+    LaunchedEffect(Unit) {
+        headDownDetector.onHeadDownDetected = {
+            cabezaAgachada.value = true
+            ServicioFatiga.iniciarAlarma(context)
+        }
+        headDownDetector.onHeadUpDetected = {
+            cabezaAgachada.value = false
+            ServicioFatiga.detenerAlarma()
         }
     }
 }
