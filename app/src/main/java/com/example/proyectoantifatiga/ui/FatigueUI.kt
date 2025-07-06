@@ -301,3 +301,6 @@ private fun AlertCard(
         }
     }
 }
+
+
+//estudiar las parte de las animaciones de como se generan los puntos

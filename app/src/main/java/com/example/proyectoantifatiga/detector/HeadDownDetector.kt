@@ -82,3 +82,5 @@ class HeadDownDetector(private val context: Context) {
         detector?.close()
     }
 }
+
+//entender y mejorar parte daniel

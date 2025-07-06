@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
 fun PantallaPrincipal() {
 
     val context = LocalContext.current
-    var permissionGranted by remember { mutableStateOf(false) }
+    var permissionGranted by remember { mutableStateOf(false) }//para conseder permiso a la camara, inicializa como falso.
 
     val requestPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -54,5 +54,4 @@ fun PantallaPrincipal() {
     if (permissionGranted) {
         BlackScreenWithDetection()
         }
-
     }

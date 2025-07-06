@@ -98,3 +98,5 @@ class PantallaReposo : ComponentActivity() {
         }
     }
 }
+
+//pantalla reposo se combina con la pantalla black
