@@ -31,10 +31,6 @@
             android:foregroundServiceType="camera" />
 
         <!-- 👁️ Servicio nuevo de detección en segundo plano -->
-        <service
-            android:name=".service.ServicioDeteccionFatiga"
-            android:exported="false"
-            android:foregroundServiceType="camera|microphone" />
 
         <!-- 🚀 Activity principal -->
         <activity
