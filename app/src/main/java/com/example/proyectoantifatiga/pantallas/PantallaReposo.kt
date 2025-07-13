@@ -22,14 +22,12 @@ class PantallaReposo : ComponentActivity() {
         val detector = FatigueDetector(this)
         val headDownDetector = HeadDownDetector(this)
 
-
         val cameraController = CameraController(
             this, // context
             CameraSelector.LENS_FACING_FRONT, // lente
             detector, // FatigueDetector
             headDownDetector // HeadDownDetector
         )
-
 
         val ear = mutableStateOf(0f)
         val estaFatigado = mutableStateOf(false)

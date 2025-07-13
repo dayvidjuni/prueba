@@ -15,15 +15,14 @@ import androidx.core.content.ContextCompat
 import com.example.proyectoantifatiga.ui.screen.BlackScreenWithDetection
 
 @Composable
-fun PantallaPrincipal() {
+fun Permisocamara() {
 
     val context = LocalContext.current
     var permissionGranted by remember { mutableStateOf(false) }//para conseder permiso a la camara, inicializa como falso.
 
     val requestPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        permissionGranted = isGranted
+    ) { isGranted -> permissionGranted = isGranted
     }
     LaunchedEffect(Unit) {
 
